@@ -1,0 +1,13 @@
+package: git.sillydong.com/chenzhidong/thumbservice
+import:
+- package: github.com/bradfitz/gomemcache
+  subpackages:
+  - memcache
+- package: github.com/codegangsta/cli
+- package: github.com/sillydong/goczd
+  subpackages:
+  - goconf
+  - gofile
+- package: gopkg.in/gographics/imagick.v2
+  subpackages:
+  - imagick
