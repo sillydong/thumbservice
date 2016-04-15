@@ -3,7 +3,6 @@ package lib
 import (
 	"crypto/md5"
 	"encoding/hex"
-	"fmt"
 	"github.com/bradfitz/gomemcache/memcache"
 	"hash"
 )
