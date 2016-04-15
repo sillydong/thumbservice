@@ -30,9 +30,9 @@ type ServiceConf struct {
 
 func main() {
 	app := cli.NewApp()
-	app.Name = "图片缩略图服务"
-	app.Usage = "不影响原文件系统布局情况下生成图片指定尺寸及清晰度的缩略图"
-	app.Author = "陈志东"
+	app.Name = "ThubmService"
+	app.Usage = "Service to resize images"
+	app.Author = "Chen.Zhidong"
 	app.Copyright = "http://sillydong.com"
 	app.Version = VERSION
 	app.Flags = []cli.Flag{
