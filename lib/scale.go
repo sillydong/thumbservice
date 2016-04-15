@@ -2,244 +2,178 @@ package lib
 
 import (
 	"fmt"
+	"github.com/sillydong/goczd/golog"
 	"gopkg.in/gographics/imagick.v2/imagick"
 	"math"
+	"net/url"
+	"strconv"
 )
 
-func crop(mw *imagick.MagickWand, x, y int, cols, rows uint) error {
-	var result error
-	result = nil
+const (
+	_                        = iota
+	MODE_CENTER              //无缩放取中间
+	MODE_SCALE_CENTER_CROP   //缩放剪切中间
+	MODE_SCALE_CENTER_INSIDE //缩放补全中间
+	MODE_FIT_XY              //缩放到指定尺寸
+)
 
-	imCols := mw.GetImageWidth()
-	imRows := mw.GetImageHeight()
-
-	if x < 0 {
-		x = 0
-	}
-	if y < 0 {
-		y = 0
-	}
-
-	if uint(x) >= imCols || uint(y) >= imRows {
-		result = fmt.Errorf("x, y more than image cols, rows")
-		return result
-	}
-
-	if cols == 0 || imCols < uint(x) + cols {
-		cols = imCols - uint(x)
-	}
-
-	if rows == 0 || imRows < uint(y) + rows {
-		rows = imRows - uint(y)
-	}
-
-	fmt.Print(fmt.Printf("wi_crop(im, %d, %d, %d, %d)\n", x, y, cols, rows))
-
-	result = mw.CropImage(cols, rows, x, y)
-
-	return result
+type ScaleConf struct {
+	ScaleMode int
+	Width     uint
+	Height    uint
+	Rotate    int
+	Format    string
+	Quality   uint
 }
 
-func proportion(mw *imagick.MagickWand, proportion int, cols uint, rows uint) error {
-	var result error
-	result = nil
+func NewScaleConf(params url.Values) *ScaleConf {
+	conf := &ScaleConf{}
+	conf.ScaleMode, _ = strconv.Atoi(params.Get("m"))
+	w, _ := strconv.Atoi(params.Get("w"))
+	conf.Width = uint(w)
+	h, _ := strconv.Atoi(params.Get("h"))
+	conf.Height = uint(h)
+	conf.Rotate, _ = strconv.Atoi(params.Get("r"))
+	conf.Format = params.Get("f")
+	q, _ := strconv.Atoi(params.Get("q"))
+	conf.Quality = uint(q)
 
-	imCols := mw.GetImageWidth()
-	imRows := mw.GetImageHeight()
-
-	if proportion == 0 {
-		fmt.Printf("p=0, wi_scale(im, %d, %d)\n", cols, rows)
-		result = mw.ResizeImage(cols, rows, imagick.FILTER_UNDEFINED, 1.0)
-
-	} else if proportion == 1 {
-
-		if cols == 0 || rows == 0 {
-			if cols > 0 {
-				rows = uint(round(float64((cols / imCols) * imRows)))
-			} else {
-				cols = uint(round(float64((rows / imRows) * imCols)))
-			}
-			fmt.Printf("p=1, wi_scale(im, %d, %d)\n", cols, rows)
-			result = mw.ResizeImage(cols, rows, imagick.FILTER_UNDEFINED, 1.0)
-		} else {
-			var x, y, sCols, sRows uint
-			x, y = 0, 0
-
-			colsRate := float64(cols) / float64(imCols)
-			rowsRate := float64(rows) / float64(imRows)
-
-			if colsRate > rowsRate {
-				sCols = cols
-				sRows = uint(round(float64(colsRate * float64(imRows))))
-				y = uint(math.Floor(float64((sRows - rows) / 2.0)))
-			} else {
-				sCols = uint(round(float64(rowsRate * float64(imCols))))
-				sRows = rows
-				x = uint(math.Floor(float64((sCols - cols) / 2.0)))
-			}
-
-			fmt.Printf("p=2, wi_scale(im, %d, %d)\n", sCols, sRows)
-			//result = mw.ResizeImage(sCols, sRows, imagick.FILTER_UNDEFINED, 1.0)
-			mw.SetGravity(imagick.GRAVITY_CENTER)
-			result = mw.StripImage()
-			result = mw.ThumbnailImage(sCols, sRows)
-			fmt.Printf("p=2, wi_crop(im, %d, %d, %d, %d)\n", x, y, cols, rows)
-			result = mw.CropImage(cols, rows, int(x), int(y))
-		}
-
-	} else if proportion == 2 {
-		x := int(math.Floor(float64((imCols - cols) / 2.0)))
-		y := int(math.Floor(float64((imRows - rows) / 2.0)))
-		fmt.Printf("p=3, wi_crop(im, %d, %d, %d, %d)\n", x, y, cols, rows)
-		result = mw.CropImage(cols, rows, x, y)
-
-	} else if proportion == 3 {
-		if cols == 0 || rows == 0 {
-			var rate uint
-			if cols > 0 {
-				rate = cols
-			} else {
-				rate = rows
-			}
-			rows = uint(round(float64(imRows * rate / 100)))
-			cols = uint(round(float64(imCols * rate / 100)))
-			fmt.Printf("p=3, wi_scale(im, %d, %d)\n", cols, rows)
-			//result = mw.ResizeImage(cols, rows, imagick.FILTER_UNDEFINED, 1.0)
-			mw.SetGravity(imagick.GRAVITY_CENTER)
-			result = mw.StripImage()
-			result = mw.ThumbnailImage(cols, rows)
-		} else {
-			rows = uint(round(float64(imRows * rows / 100)))
-			cols = uint(round(float64(imCols * cols / 100)))
-			fmt.Printf("p=3, wi_scale(im, %d, %d)\n", cols, rows)
-			//result = mw.ResizeImage(cols, rows, imagick.FILTER_UNDEFINED, 1.0)
-			mw.SetGravity(imagick.GRAVITY_CENTER)
-			result = mw.StripImage()
-			result = mw.ThumbnailImage(cols, rows)
-		}
-
-	} else if proportion == 4 {
-		var rate float64
-		rate = 1.0
-		if cols == 0 || rows == 0 {
-			if cols > 0 {
-				rate = float64(cols / imCols)
-			} else {
-				rate = float64(rows / imRows)
-			}
-		} else {
-			rateCol := float64(cols) / float64(imCols)
-			rateRow := float64(rows) / float64(imRows)
-			if rateCol < rateRow {
-				rate = rateCol
-			} else {
-				rate = rateRow
-			}
-		}
-
-		cols = uint(round(float64(float64(imCols) * rate)))
-		rows = uint(round(float64(float64(imRows) * rate)))
-		fmt.Printf("p=4, wi_scale(im, %d, %d)\n", cols, rows)
-		//result = mw.ResizeImage(cols, rows, imagick.FILTER_UNDEFINED, 1.0)
-		mw.SetGravity(imagick.GRAVITY_CENTER)
-		result = mw.StripImage()
-		result = mw.ThumbnailImage(cols, rows)
-	} else {
-		fmt.Printf("p=%v\n", proportion)
-	}
-
-	return result
-
+	return conf
 }
 
-func convert(mw *imagick.MagickWand, conf ScaleConf) error {
+func convert(mw *imagick.MagickWand, conf *ScaleConf) error {
+	golog.Debugf("call convert function %+v", conf)
 
-	fmt.Println("call convert function......")
-
-	var result error
-	result = nil
-	mw.ResetIterator()
-	mw.SetImageOrientation(imagick.ORIENTATION_TOP_LEFT)
-
-	x := conf.X
-	y := conf.Y
-	cols := uint(conf.Width)
-	rows := uint(conf.Height)
-
-	fmt.Printf("image cols %d, rows %d \n", cols, rows)
-
-	if !(cols == 0 && rows == 0) {
-
-		/* crop and scale */
-		if x == -1 && y == -1 {
-			fmt.Println("call proportion function......")
-			fmt.Print(fmt.Printf("proportion(im, %d, %d, %d) \n", conf.Proportion, cols, rows))
-
-			result = proportion(mw, conf.Proportion, cols, rows)
-			if result != nil {
-				return result
-			}
-		} else {
-			fmt.Println("call crop function......")
-			fmt.Print(fmt.Printf("crop(im, %d, %d, %d, %d) \n", x, y, cols, rows))
-
-			result = crop(mw, x, y, cols, rows)
-			if result != nil {
-				return result
-			}
-		}
+	if err := mw.SetImageOrientation(imagick.ORIENTATION_TOP_LEFT); err != nil {
+		return err
 	}
 
-	/* rotate image */
-	if conf.Rotate != 0 {
-		fmt.Print(fmt.Printf("wi_rotate(im, %d) \n", conf.Rotate))
+	//清理数据
+	if err := mw.StripImage(); err != nil {
+		return err
+	}
 
+	//旋转
+	if conf.Rotate > 0 {
 		background := imagick.NewPixelWand()
 		if background == nil {
-			result = fmt.Errorf("init new pixelwand faile.")
-			return result
+			return fmt.Errorf("init new pixelwand faile.")
 		}
 		defer background.Destroy()
 		isOk := background.SetColor("#ffffff")
 		if !isOk {
-			result = fmt.Errorf("set background color faile.")
-			return result
+			return fmt.Errorf("set background color faile.")
 		}
 
-		result = mw.RotateImage(background, float64(conf.Rotate))
-		if result != nil {
-			return result
+		if err := mw.RotateImage(background, float64(conf.Rotate)); err != nil {
+			return err
 		}
 	}
 
-	/* set gray */
-	if conf.Gary == 1 {
-		fmt.Print(fmt.Printf("wi_gray(im) \n"))
-		result = mw.SetImageType(imagick.IMAGE_TYPE_GRAYSCALE)
-		if result != nil {
-			return result
+	//裁剪
+	imagewidth := mw.GetImageWidth()
+	imageheight := mw.GetImageHeight()
+	if (conf.Width > 0 || conf.Height > 0) && (conf.Width != imagewidth || conf.Height != imageheight) {
+		switch conf.ScaleMode {
+		case MODE_CENTER:
+			if conf.Width == 0 && conf.Height > 0 {
+				conf.Width = uint(round((float64(conf.Height) * float64(imagewidth) / float64(imageheight))))
+			} else if conf.Width > 0 && conf.Height == 0 {
+				conf.Height = uint(round(float64(conf.Width) * float64(imageheight) / float64(imagewidth)))
+			}
+
+			x := int(round((float64(imagewidth) - float64(conf.Width)) / 2))
+			y := int(round((float64(imageheight) - float64(conf.Height)) / 2))
+			golog.Debugf("1 crop: w:%v\th:%v\tx:%v\ty:%v", conf.Width, conf.Height, x, y)
+			if err := mw.CropImage(conf.Width, conf.Height, x, y); err != nil {
+				return err
+			}
+		case MODE_SCALE_CENTER_CROP:
+			var scale float64
+			if conf.Width > 0 && conf.Height > 0 {
+				scale = math.Min(float64(imagewidth)/float64(conf.Width), float64(imageheight)/float64(conf.Height))
+			} else if conf.Width == 0 && conf.Height > 0 {
+				scale = float64(imageheight) / float64(conf.Height)
+			} else if conf.Width > 0 && conf.Height == 0 {
+				scale = float64(imagewidth) / float64(conf.Width)
+			}
+
+			scalewidth := uint(round(float64(imagewidth) / scale))
+			if conf.Width == 0 {
+				conf.Width = scalewidth
+			}
+			scaleheight := uint(round(float64(imageheight) / scale))
+			if conf.Height == 0 {
+				conf.Height = scaleheight
+			}
+			golog.Debugf("2 thumb: w:%v\th:%v", scalewidth, scaleheight)
+			if err := mw.ThumbnailImage(scalewidth, scaleheight); err != nil {
+				return err
+			}
+
+			x := int(round((float64(scalewidth) - float64(conf.Width)) / 2))
+			y := int(round((float64(scaleheight) - float64(conf.Height)) / 2))
+			golog.Debugf("2 crop: w:%v\th:%v\tx:%v\ty:%v", conf.Width, conf.Height, x, y)
+			if err := mw.CropImage(conf.Width, conf.Height, x, y); err != nil {
+				return err
+			}
+		case MODE_SCALE_CENTER_INSIDE:
+			var scale float64
+			if conf.Width > 0 && conf.Height > 0 {
+				scale = math.Max(float64(imagewidth)/float64(conf.Width), float64(imageheight)/float64(conf.Height))
+			} else if conf.Width == 0 && conf.Height > 0 {
+				scale = float64(imageheight) / float64(conf.Height)
+			} else if conf.Width > 0 && conf.Height == 0 {
+				scale = float64(imagewidth) / float64(conf.Width)
+			}
+
+			scalewidth := uint(round(float64(imagewidth) / scale))
+			if conf.Width == 0 {
+				conf.Width = scalewidth
+			}
+			scaleheight := uint(round(float64(imageheight) / scale))
+			if conf.Height == 0 {
+				conf.Height = scaleheight
+			}
+			golog.Debugf("3 thumb: w:%v\th:%v", scalewidth, scaleheight)
+			if err := mw.ThumbnailImage(scalewidth, scaleheight); err != nil {
+				return err
+			}
+
+			x := int(round((float64(conf.Width) - float64(scalewidth)) / 2))
+			y := int(round((float64(scaleheight) - float64(conf.Height)) / 2))
+			golog.Debugf("3 crop: w:%v\th:%v\tx:%v\ty:%v", conf.Width, conf.Height, x, y)
+			if err := mw.ExtentImage(conf.Width, conf.Height, -x, y); err != nil {
+				return err
+			}
+		case MODE_FIT_XY:
+			if conf.Width == 0 && conf.Height > 0 {
+				conf.Width = uint(round((float64(conf.Height) * float64(imagewidth) / float64(imageheight))))
+			} else if conf.Width > 0 && conf.Height == 0 {
+				conf.Height = uint(round(float64(conf.Width) * float64(imageheight) / float64(imagewidth)))
+			}
+			golog.Debugf("4 thumb: w:%v\th:%v", conf.Width, conf.Height)
+			if err := mw.ThumbnailImage(uint(conf.Width), uint(conf.Height)); err != nil {
+				return err
+			}
 		}
 	}
 
-	/* set quality */
-	fmt.Print(fmt.Printf("wi_set_quality(im, %d) \n", conf.Quality))
-	result = mw.SetImageCompressionQuality(uint(conf.Quality))
-	if result != nil {
-		return result
-	}
-
-	/* set format */
-	if "none" != conf.Format {
-		fmt.Print(fmt.Printf("wi_set_format(im, %s) \n", conf.Format))
-		result = mw.SetImageFormat(conf.Format)
-		if result != nil {
-			return result
+	//压缩
+	if conf.Quality != 100 {
+		if err := mw.SetCompressionQuality(conf.Quality); err != nil {
+			return err
 		}
 	}
 
-	fmt.Print(fmt.Printf("convert(im, req) %s \n", result))
+	//调整格式
+	if conf.Format != mw.GetImageFormat() {
+		if err := mw.SetImageFormat(conf.Format); err != nil {
+			return err
+		}
+	}
 
-	return result
+	return nil
 }
 
 func round(val float64) float64 {

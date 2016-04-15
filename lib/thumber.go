@@ -1,86 +1,77 @@
 package lib
 
 import (
-	"github.com/sillydong/goczd/gofile"
 	"fmt"
-	"path"
+	"github.com/sillydong/goczd/golog"
 	"gopkg.in/gographics/imagick.v2/imagick"
-	"strings"
-	"os"
-)
-
-const (
-	_ = iota
-	TYPE_FOLLOW_WIDTH_SCALE
-	TYPE_FOLLOW_HEIGHT_SCALE
-	TYPE_CUT_TOP_LEFT
-	TYPE_CUT_TOP_RIGHT
-	TYPE_CUT_BOTTOM_LEFT
-	TYPE_CUT_BOTTOM_RIGHT
-	TYPE_CUT_CENTER
 )
 
 type Thumber struct {
-	root   string
-	cacher *Cacher
+	DefaultMode    int
+	DefaultFormat  string
+	DefaultQuality uint
+	cacher         *Cacher
 }
 
-type ScaleConf struct {
-	ImageType  string
-	Width      int
-	Height     int
-	Proportion int
-	Gary       int
-	X          int
-	Y          int
-	Rotate     int
-	Format     string
-	Quality    int
+func NewThumber(defaultmode int, defaultformat string, defaultquality int, cacher *Cacher) *Thumber {
+	return &Thumber{DefaultMode: defaultmode, DefaultFormat: defaultformat, DefaultQuality: uint(defaultquality), cacher: cacher}
 }
 
-func NewThumber(root string, cacher *Cacher) *Thumber {
-	return &Thumber{root:root, cacher:cacher}
-}
-
-func (thumb *Thumber)ParseFile(request string, conf ScaleConf) ([]byte, error) {
+func (thumb *Thumber) ReadFile(orig_path string) ([]byte, error) {
+	golog.Debugf("read file %v\n", orig_path)
 	mw := imagick.NewMagickWand()
 	defer mw.Destroy()
-	request = path.Join(thumb.root, request)
-	//request = strings.Replace(request, "/", os.PathSeparator, -1)
-	fmt.Println(request)
-	if gofile.FileExists(request) {
-		return nil, fmt.Errorf("%s not found", request)
-	}
-	mw.ReadImage(request)
+	mw.ReadImage(orig_path)
+	mw.ResetIterator()
 	origin := mw.GetImageBlob()
-	if origin == nil {
-		panic(fmt.Errorf("fail get image content: %s", request))
+	if origin == nil || len(origin) == 0 {
+		return nil, fmt.Errorf("fail get image content: %s", orig_path)
 	}
-	thumb.cacher.Put("bbb", origin)
+	thumb.cacher.Put(orig_path, origin)
+	return origin, nil
+}
+
+func (thumb *Thumber) ParseFile(orig_path, thumb_path string, conf *ScaleConf) ([]byte, error) {
+	golog.Debugf("parse file %v", orig_path)
+	mw := imagick.NewMagickWand()
+	defer mw.Destroy()
+	mw.ReadImage(orig_path)
+	origin := mw.GetImageBlob()
+	if origin == nil || len(origin) == 0 {
+		return nil, fmt.Errorf("fail get image content: %s", orig_path)
+	}
+	golog.Debugf("cache origin:%v", len(origin))
+	thumb.cacher.Put(orig_path, origin)
 	if err := convert(mw, conf); err != nil {
-		panic(err)
-	}
-	result := mw.GetImageBlob()
-	if result != nil {
-		thumb.cacher.Put("aaa", result)
-		return result, nil
-	}else {
-		return nil, fmt.Errorf("fail convert image: %s", request)
+		return nil, err
+	} else {
+		result := mw.GetImageBlob()
+		if result != nil && len(result) > 0 {
+			golog.Debugf("cache thumb:%v", len(result))
+			thumb.cacher.Put(thumb_path, result)
+			return result, nil
+		} else {
+			return nil, fmt.Errorf("fail convert image: %s", orig_path)
+		}
 	}
 }
 
-func (thumb *Thumber)ParseBlob(data []byte, conf ScaleConf) ([]byte, error) {
+func (thumb *Thumber) ParseBlob(data []byte, thumb_path string, conf *ScaleConf) ([]byte, error) {
+	golog.Debugf("parse blob %v", len(data))
 	mw := imagick.NewMagickWand()
 	defer mw.Destroy()
 	mw.ReadImageBlob(data)
 	if err := convert(mw, conf); err != nil {
-		panic(err)
-	}
-	result := mw.GetImageBlob()
-	if result != nil {
-		thumb.cacher.Put("aaa", result)
-		return result, nil
-	}else {
-		return nil, fmt.Errorf("fail convert image blob")
+		return nil, err
+	} else {
+		mw.ResetIterator()
+		result := mw.GetImageBlob()
+		if result != nil && len(result) > 0 {
+			golog.Debugf("cache thumb:%v", len(result))
+			thumb.cacher.Put(thumb_path, result)
+			return result, nil
+		} else {
+			return nil, fmt.Errorf("fail convert image blob")
+		}
 	}
 }

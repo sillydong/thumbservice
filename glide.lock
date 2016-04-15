@@ -1,5 +1,5 @@
 hash: 276c4516e27e70f71db8c742268ba09e744a6062505b59d9266df7483f5e37b5
-updated: 2016-04-14T10:21:40.436896+08:00
+updated: 2016-04-15T22:37:29.253414461+08:00
 imports:
 - name: github.com/bradfitz/gomemcache
   version: fb1f79c6b65acda83063cbc69f6bba1522558bfc
@@ -8,10 +8,12 @@ imports:
 - name: github.com/codegangsta/cli
   version: 71f57d300dd6a780ac1856c005c4b518cfd498ec
 - name: github.com/sillydong/goczd
-  version: 628a2ef7c4488e7900c686e15481ecba33100e10
+  version: 6d1a4930e38d987d04e5831c3a63b2b7e323966d
   subpackages:
   - goconf
   - gofile
+  - golog
+  - golog/logs
 - name: gopkg.in/bufio.v1
   version: 567b2bfa514e796916c4747494d6ff5132a1dfce
 - name: gopkg.in/gographics/imagick.v2
